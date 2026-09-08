@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>學習歷程 AI 評估</title>
+  <meta name="description" content="從你的學習歷程出發，讓 AI 幫你看見教授眼中的你。">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+  <!-- PDF.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+  </script>
+
+  <!-- Mammoth.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
+
+  <!-- jsonrepair — UMD 瀏覽器版本，掛載為 window.JSONRepair.jsonrepair，作為 JSON 解析第三層 fallback -->
+  <script src="https://cdn.jsdelivr.net/npm/jsonrepair@3/lib/umd/jsonrepair.min.js"
+    onload="console.log('[jsonrepair] 已載入，全域名稱：window.JSONRepair.jsonrepair')"
+    onerror="console.warn('[jsonrepair] CDN 載入失敗，將依靠內建修復邏輯')">
+  </script>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer" role="status" aria-live="polite"></div>
+
+<!-- ===================== NAV ===================== -->
+<header class="nav">
+  <div class="nav-inner">
+    <span class="nav-brand">學習歷程評估</span>
+    <button class="nav-new" id="newAnalysisBtn" style="display:none" onclick="resetApp()">新的評估</button>
+  </div>
+</header>
+
+<!-- ===================== HOME PAGE ===================== -->
+<main id="homePage" class="page active">
+  <div class="home-wrap">
+
+    <!-- Hero -->
+    <div class="home-hero">
+      <h1>學習歷程評估</h1>
+      <p class="home-sub">用 AI 從招生角度重新理解你的學習歷程。</p>
+    </div>
+
+    <!-- Privacy -->
+    <div class="notice">
+      學習歷程可能包含個人資料，請確認你願意將檔案內容提供給 Gemini 進行分析。
+      你的 API Key 與學習歷程僅在瀏覽器中處理，不會傳送至任何第三方伺服器。
+    </div>
+
+    <!-- Form -->
+    <div class="form-section">
+
+      <!-- API Key -->
+      <div class="field-group">
+        <label class="field-label">Gemini API Key</label>
+        <div class="api-row">
+          <input
+            type="password"
+            id="apiKeyInput"
+            class="field-input"
+            placeholder="AIza…"
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <button class="btn-text" id="apiKeyToggle" type="button">顯示</button>
+          <button class="btn-outline" id="apiKeyValidate" type="button">驗證</button>
+        </div>
+        <div class="field-hint" id="apiKeyStatus"></div>
+        <div class="field-note">
+          尚未有 API Key？前往 <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a> 免費取得。
+        </div>
+      </div>
+
+      <!-- Upload -->
+      <div class="field-group">
+        <label class="field-label">學習歷程</label>
+        <div class="upload-zone" id="uploadZone" role="region" aria-label="檔案上傳區域">
+          <input
+            type="file"
+            id="fileInput"
+            multiple
+            accept=".pdf,.docx,.txt,.md,.markdown,.png,.jpg,.jpeg,.webp,.gif"
+            aria-label="選擇學習歷程檔案"
+          >
+          <div class="upload-prompt">
+            <span class="upload-plus">＋</span>
+            <span>上傳學習歷程</span>
+          </div>
+          <div class="upload-formats">PDF · DOCX · TXT · MD · 圖片</div>
+        </div>
+        <div class="file-list" id="fileList"></div>
+      </div>
+
+      <!-- Schools -->
+      <div class="field-group">
+        <label class="field-label">目標校系</label>
+        <div id="schoolEntries" class="school-entries"></div>
+        <button class="btn-text-sm" id="addSchoolBtn" type="button">＋ 新增志願</button>
+        <div class="field-note">可輸入多個志願，AI 以第一志願為主要分析對象。</div>
+      </div>
+
+      <!-- Submit -->
+      <button class="btn-primary" id="analyzeBtn" type="button">開始分析</button>
+
+      <div class="submit-note">
+        AI 評估僅供參考，不代表實際招生委員或教授的評價。預計分析時間：30–60 秒。
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<!-- ===================== LOADING PAGE ===================== -->
+<div id="loadingPage" class="page loading-page" role="status" aria-live="polite">
+  <div class="loading-inner">
+    <div class="loading-ring" aria-hidden="true">
+      <div class="loading-ring-inner"></div>
+    </div>
+    <div class="loading-title">AI 正在分析</div>
+    <div class="loading-sub" id="loadingStatus">正在讀取學習歷程…</div>
+    <div class="loading-steps" id="loadingSteps"></div>
+  </div>
+</div>
+
+<!-- ===================== RESULT PAGE ===================== -->
+<div id="resultPage" class="page result-page">
+  <div class="result-wrap">
+
+    <!-- Back -->
+    <div class="result-back">
+      <button class="btn-ghost" id="backBtn" type="button">← 重新評估</button>
+      <span class="result-back-note">AI 評估僅供參考，不代表實際錄取結果</span>
+    </div>
+
+    <!-- 1. 目標校系 -->
+    <div class="result-school" id="resultSchool">
+      <div class="result-school-label">目標校系</div>
+      <div class="result-school-name" id="resultSchoolName">—</div>
+      <div class="result-school-dept" id="resultDeptName">—</div>
+    </div>
+
+    <!-- 2. 總分 -->
+    <div class="result-score-section">
+      <div class="result-score-main">
+        <span class="result-score-num" id="resultScore">—</span>
+        <span class="result-score-denom">/ 100</span>
+      </div>
+      <div class="result-fit-level" id="resultFitLevel">—</div>
+    </div>
+
+    <!-- 3. 總結 -->
+    <div class="result-summary" id="resultSummary"></div>
+
+    <!-- AI Inference Note -->
+    <div id="inferenceNote" class="result-note" style="display:none"></div>
+
+    <!-- 4. 能力雷達 -->
+    <section class="result-section">
+      <div class="section-heading">能力分析</div>
+      <div class="radar-layout">
+        <div class="radar-chart-wrap">
+          <canvas id="radarChart" aria-label="能力雷達圖" role="img"></canvas>
+        </div>
+        <div class="skill-list" id="skillList"></div>
+      </div>
+    </section>
+
+    <!-- 5. 優勢 -->
+    <section class="result-section">
+      <div class="section-heading">優勢</div>
+      <div id="strengthsList"></div>
+    </section>
+
+    <!-- 6. 弱點 -->
+    <section class="result-section">
+      <div class="section-heading">需要注意</div>
+      <div id="weaknessesList"></div>
+    </section>
+
+    <!-- 7. 關鍵要點 -->
+    <section class="result-section">
+      <div class="section-heading">教授第一眼會注意到什麼</div>
+      <div id="keyPointsList"></div>
+    </section>
+
+    <!-- 8. 校系契合度 -->
+    <section class="result-section">
+      <div class="section-heading">校系契合度</div>
+      <div class="fit-section">
+        <div class="fit-score-row">
+          <span class="fit-score-num" id="fitScore">—</span>
+          <span class="fit-score-unit">/ 100</span>
+          <span class="fit-level-badge" id="fitLevelBadge">—</span>
+        </div>
+        <div class="fit-disclaimer">此分數代表學習歷程與目標校系特質的匹配程度，不代表實際錄取機率。</div>
+        <div id="fitReasonsList"></div>
+        <div id="fitGapsList"></div>
+      </div>
+    </section>
+
+    <!-- 9. 教授觀點 -->
+    <section class="result-section">
+      <div class="section-heading">
+        教授觀點
+        <span class="section-badge">AI 模擬</span>
+      </div>
+      <div class="prof-disclaimer-global">以下為 AI 根據不同教授關注面向所模擬的可能觀點，不代表任何實際教授、招生委員或大學官方立場。</div>
+      <div class="prof-tabs" id="profTabs" role="tablist"></div>
+      <div class="prof-panels" id="profPanels"></div>
+    </section>
+
+    <!-- 10. 面試問題 -->
+    <section class="result-section">
+      <div class="section-heading">面試問題</div>
+      <p class="section-sub">點擊展開教授可能提問的原因。</p>
+      <div id="interviewList"></div>
+    </section>
+
+    <!-- 11. 改善建議 -->
+    <section class="result-section">
+      <div class="section-heading">改善建議</div>
+      <div id="improvementList"></div>
+    </section>
+
+    <!-- Footer Disclaimer -->
+    <div class="result-footer-note">
+      本平台的 AI 評估報告僅供高中生自我檢視學習歷程之用，不代表任何實際大學招生委員、教授或評審的意見，亦不代表錄取機率。
+      實際申請結果受多種因素影響，請以官方招生資訊為準。
+    </div>
+
+  </div>
+</div>
+
+<!-- ===================== FOOTER ===================== -->
+<footer class="footer">
+  <span>學習歷程 AI 評估 · Powered by Google Gemini</span>
+</footer>
+
+<!-- Scripts -->
+<script src="parser.js"></script>
+<script src="gemini.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
