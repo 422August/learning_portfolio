@@ -1,0 +1,24 @@
+{
+  "name": "learning-portfolio",
+  "version": "1.0.0",
+  "description": "AI 學習歷程評估平台 - 從你的學習歷程出發，讓 AI 幫你看見教授眼中的你。",
+  "main": "app.js",
+  "scripts": {
+    "dev": "python3 -m http.server 8080",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/422August/learning_portfolio.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/422August/learning_portfolio/issues"
+  },
+  "homepage": "https://github.com/422August/learning_portfolio#readme",
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
+  }
+}
