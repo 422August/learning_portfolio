@@ -364,15 +364,15 @@ const AssessmentParser = (() => {
   /**
    * Step 3: Schema Validation — 確認必要欄位與型別
    */
-  function validateAssessmentData(data) {
+  function validateAssessmentData(data, mode = 'apply') {
+    const single = mode === 'single';
     const errors = [];
 
     // overall_score
     if (typeof data.overall_score !== 'number') {
       errors.push('overall_score 不是數字');
-    } else if (data.overall_score < 0 || data.overall_score > 100) {
-      errors.push(`overall_score 超出範圍（${data.overall_score}）`);
     }
+    // 不再硬性限制分數範圍；顯示時僅以 0–100 刻度裁切
 
     // summary
     if (typeof data.summary !== 'string' || !data.summary.trim()) {
@@ -383,7 +383,7 @@ const AssessmentParser = (() => {
     if (!data.skills || typeof data.skills !== 'object') {
       errors.push('skills 欄位缺失或格式錯誤');
     } else {
-      const skillKeys = ['academic','professional','practical','creativity','problem_solving','self_learning','communication','reflection','interdisciplinary','fit'];
+      const skillKeys = ['academic','professional','practical','creativity','problem_solving','self_learning','communication','reflection','interdisciplinary'].concat(single ? [] : ['fit']);
       for (const k of skillKeys) {
         const skill = data.skills[k];
         if (!skill || typeof skill !== 'object') {
@@ -395,7 +395,7 @@ const AssessmentParser = (() => {
     }
 
     // Arrays
-    const arrayFields = ['strengths', 'weaknesses', 'key_points', 'professor_reviews', 'interview_questions', 'improvement_plan'];
+    const arrayFields = ['strengths', 'weaknesses', 'key_points', 'improvement_plan'].concat(single ? [] : ['professor_reviews', 'interview_questions']);
     for (const f of arrayFields) {
       if (!Array.isArray(data[f])) {
         errors.push(`${f} 不是陣列`);
@@ -403,7 +403,9 @@ const AssessmentParser = (() => {
     }
 
     // fit_analysis
-    if (!data.fit_analysis || typeof data.fit_analysis !== 'object') {
+    if (single) {
+      // 單一學習歷程模式不含契合度
+    } else if (!data.fit_analysis || typeof data.fit_analysis !== 'object') {
       errors.push('fit_analysis 欄位缺失');
     } else {
       if (typeof data.fit_analysis.score !== 'number') {
@@ -424,7 +426,8 @@ const AssessmentParser = (() => {
    * Step 4: Normalization — 補全缺失欄位，確保型別安全
    * 只補全而非拒絕，讓部分正確的資料也能顯示
    */
-  function normalizeAssessmentData(data) {
+  function normalizeAssessmentData(data, mode = 'apply') {
+    const single = mode === 'single';
     const clamp = (v, min = 0, max = 100) => {
       const n = Number(v);
       return isNaN(n) ? 50 : Math.min(Math.max(Math.round(n), min), max);
@@ -441,7 +444,7 @@ const AssessmentParser = (() => {
 
     // skills
     data.skills = data.skills || {};
-    const skillKeys = ['academic','professional','practical','creativity','problem_solving','self_learning','communication','reflection','interdisciplinary','fit'];
+    const skillKeys = ['academic','professional','practical','creativity','problem_solving','self_learning','communication','reflection','interdisciplinary'].concat(single ? [] : ['fit']);
     for (const k of skillKeys) {
       if (!data.skills[k] || typeof data.skills[k] !== 'object') {
         data.skills[k] = { score: 50, reason: '（資料不足，無法評估）' };
@@ -470,6 +473,11 @@ const AssessmentParser = (() => {
     // key_points
     data.key_points = arr(data.key_points).map(p => str(p) || '（無內容）');
 
+    if (single) {
+      delete data.fit_analysis;
+      data.professor_reviews = [];
+      data.interview_questions = [];
+    } else {
     // fit_analysis
     data.fit_analysis = (data.fit_analysis && typeof data.fit_analysis === 'object') ? data.fit_analysis : {};
     data.fit_analysis.score = clamp(data.fit_analysis.score != null ? data.fit_analysis.score : (data.skills?.fit?.score || data.overall_score || 50));
@@ -513,6 +521,17 @@ const AssessmentParser = (() => {
       why:      str(q?.why) || '',
     }));
 
+    }
+
+    // file_analysis（舊紀錄沒有此欄位，缺少時為空陣列）
+    data.file_analysis = arr(data.file_analysis).map(f => ({
+      file_name:  str(f?.file_name) || '（未命名）',
+      role:       str(f?.role),
+      score:      clamp(f?.score),
+      highlights: str(f?.highlights),
+      issues:     str(f?.issues),
+    }));
+
     // improvement_plan
     const validPriority = ['P0', 'P1', 'P2', 'P3'];
     data.improvement_plan = arr(data.improvement_plan).map(item => ({
@@ -528,7 +547,7 @@ const AssessmentParser = (() => {
    * 主要入口：解析 Gemini 原始回應
    * 回傳 { data, error } — error 為 null 表示成功
    */
-  function parseGeminiResponse(rawText) {
+  function parseGeminiResponse(rawText, mode = 'apply') {
     if (!rawText || typeof rawText !== 'string' || !rawText.trim()) {
       return { data: null, error: 'Gemini 回傳為空' };
     }
@@ -554,7 +573,7 @@ const AssessmentParser = (() => {
     }
 
     // 3. Schema 驗證
-    const validationErrors = validateAssessmentData(rawData);
+    const validationErrors = validateAssessmentData(rawData, mode);
     if (validationErrors.length > 0) {
       console.warn('[AssessmentParser] Schema 驗證警告：', validationErrors);
       // 驗證有警告時，確認是否有基本核心評估資料（overall_score 或 skills）
@@ -569,7 +588,7 @@ const AssessmentParser = (() => {
     }
 
     // 4. Normalization — 讓資料安全可用並補齊預設值
-    const normalized = normalizeAssessmentData(rawData);
+    const normalized = normalizeAssessmentData(rawData, mode);
 
     return { data: normalized, error: null };
   }
