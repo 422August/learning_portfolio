@@ -24,6 +24,9 @@ python3 -m http.server 8080
 - gemini.js    — Gemini API 整合
 - parser.js    — 檔案解析
 
-## 支援格式：PDF, DOCX, TXT, MD, PNG, JPG（單檔上限 15MB）
+## 功能
+
+- 支援格式：PDF, DOCX, TXT, MD, PNG, JPG（單檔上限 15MB）
+- Vercel Web Analytics 整合：追蹤使用者分析與網站效能
 
 ## 聲明：AI 評估僅供參考，不代表實際招生結果。
